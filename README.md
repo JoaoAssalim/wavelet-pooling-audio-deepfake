@@ -6,7 +6,7 @@ Projeto de mestrado para detecção de áudio deepfake com CNNs em PyTorch. Os �
 
 ```text
 .
-├── Data/                  # CSVs gerados pelo notebook de pré-processamento
+├── Data/                  # CSVs gerados localmente (não versionado; ver /Data)
 ├── DS_10283_3336/         # Dataset ASVspoof 2019 LA (não versionado)
 ├── notebooks/
 │   ├── normalize_data.ipynb
@@ -22,7 +22,7 @@ Projeto de mestrado para detecção de áudio deepfake com CNNs em PyTorch. Os �
 
 - Python 3.12
 - pip
-- Espaço em disco para o ASVspoof 2019 LA (vários GB)
+- Espaço em disco para o ASVspoof 2019 LA e para a pasta `/Data` (vários GB)
 - GPU opcional: CUDA ou Apple Silicon (MPS). Sem GPU, o treino usa CPU.
 
 ## Instalação
@@ -67,6 +67,21 @@ DS_10283_3336/LA/
 ```
 
 Se o caminho for diferente, altere `base_dataset_path` em `notebooks/normalize_data.ipynb`.
+
+## /Data
+
+A pasta `/Data` **não entra no repositório** (está no `.gitignore`). Os CSVs somam vários GB e passam do limite de push do GitHub.
+
+Ela é criada ao rodar `notebooks/normalize_data.ipynb` e fica na raiz do projeto:
+
+```text
+Data/
+├── train_data_features.csv
+├── dev_data_features.csv
+└── eval_data_features.csv
+```
+
+Os notebooks de treino leem esses arquivos em `../Data/`. Sem eles, o pré-processamento precisa ser executado de novo.
 
 ## Rodar os notebooks
 
