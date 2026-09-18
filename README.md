@@ -2,23 +2,43 @@
 
 Projeto de mestrado para detecção de áudio deepfake com CNNs em PyTorch. Os áudios de 16 kHz do **ASVspoof 2019 Logical Access (LA)** são ajustados para 4 segundos e convertidos em representações cepstrais **MFCC** e **LFCC**. Em seguida, três arquiteturas de CNN classificam cada amostra como **bonafide** ou **spoof**: pooling máximo, pooling médio e pooling wavelet pela sub-banda de maior energia.
 
-## Estrutura
+## Estrutura atual do repositório
 
 ```text
 .
-├── Data/                              # Features e metadados gerados localmente
-├── DS_10283_3336/                     # Dataset ASVspoof 2019 LA (não versionado)
+├── .gitignore                         # Ignora Data/ e DS_10283_3336/
+├── README.md
+├── requirements.txt
 ├── notebooks/
 │   ├── normalize_data.ipynb
 │   ├── cnn_max_pooling.ipynb
 │   ├── cnn_average_pooling.ipynb
+│   ├── custom_wavelet_cnn_model_highest_energy.ipynb
 │   ├── custom_wavelet_cnn_model_highest_energy_v2.ipynb
 │   ├── analyze_results.ipynb
-│   └── v1/                           # Notebooks dos experimentos anteriores
+│   └── v1/                           # Experimentos anteriores e variações de versão
+│       ├── normalize_data.ipynb
+│       ├── simple_cnn_model_max_pooling.ipynb
+│       ├── simple_cnn_model_average_pooling.ipynb
+│       ├── custom_wavelet_cnn_model_highest_energy.ipynb
+│       ├── custom_wavelet_cnn_model_highest_energy_v2.ipynb
+│       ├── custom_wavelet_cnn_model_adaptative.ipynb
+│       ├── different_wavelets/
+│       └── different_seeds/
 ├── results/
-│   └── v2/                           # Métricas de avaliação e históricos de treino
-└── requirements.txt
+│   └── v2/
+│       ├── max_results.csv
+│       ├── average_results.csv
+│       ├── wavelet_results.csv
+│       ├── training_max.csv
+│       ├── training_average.csv
+│       └── training_db*.csv
+└── (pastas locais criadas em execução)
+    ├── Data/                          # Features e metadados gerados localmente
+    └── DS_10283_3336/                 # Dataset ASVspoof 2019 LA não versionado
 ```
+
+As pastas `Data/` e `DS_10283_3336/` não ficam no Git e são criadas localmente quando você baixa o dataset e executa o pré-processamento.
 
 ## Requisitos
 
