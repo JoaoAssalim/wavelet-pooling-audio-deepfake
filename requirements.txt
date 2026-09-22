@@ -6,3 +6,4 @@ matplotlib==3.11.2
 pandas==3.0.5
 spafe==0.3.3
 torchvision==0.29.0
+tensorflow-addons
