@@ -1,50 +1,57 @@
-# Custom CNN Audio DeepFake Detection — v2
+# Custom CNN Audio DeepFake Detection — v2.5
 
-Projeto de mestrado para detecção de áudio deepfake com CNNs em PyTorch. Os áudios de 16 kHz do **ASVspoof 2019 Logical Access (LA)** são ajustados para 4 segundos e convertidos em representações cepstrais **MFCC** e **LFCC**. Em seguida, três arquiteturas de CNN classificam cada amostra como **bonafide** ou **spoof**: pooling máximo, pooling médio e pooling wavelet pela sub-banda de maior energia.
+Versão oficial e final do projeto de mestrado para detecção de áudio deepfake com CNNs em PyTorch.
 
-## Estrutura atual do repositório
+Os áudios de 16 kHz do **ASVspoof 2019 Logical Access (LA)** são ajustados para 4 segundos e convertidos em representações cepstrais **MFCC** e **LFCC**. O treino usa os splits train/dev do ASVspoof 2019. A avaliação é feita no eval do **ASVspoof 2019 LA** e no eval do **ASVspoof 2021 LA**.
+
+Três arquiteturas classificam cada amostra como **bonafide** ou **spoof**:
+
+- CNN com `MaxPool2d`
+- CNN com `AvgPool2d`
+- CNN com pooling wavelet na banda de aproximação (baixa frequência), com SpecAugment no treino
+
+Cada arquitetura é treinada em **5 seeds**: `42`, `49`, `51`, `69` e `73`.
+
+## Estrutura
 
 ```text
 .
-├── .gitignore                         # Ignora Data/ e DS_10283_3336/
 ├── README.md
 ├── requirements.txt
 ├── notebooks/
 │   ├── normalize_data.ipynb
-│   ├── cnn_max_pooling.ipynb
-│   ├── cnn_average_pooling.ipynb
-│   ├── custom_wavelet_cnn_model_highest_energy.ipynb
-│   ├── custom_wavelet_cnn_model_highest_energy_v2.ipynb
 │   ├── analyze_results.ipynb
-│   └── v1/                           # Experimentos anteriores e variações de versão
-│       ├── normalize_data.ipynb
-│       ├── simple_cnn_model_max_pooling.ipynb
-│       ├── simple_cnn_model_average_pooling.ipynb
-│       ├── custom_wavelet_cnn_model_highest_energy.ipynb
-│       ├── custom_wavelet_cnn_model_highest_energy_v2.ipynb
-│       ├── custom_wavelet_cnn_model_adaptative.ipynb
-│       ├── different_wavelets/
-│       └── different_seeds/
+│   ├── max_pooling_seeds/
+│   ├── average_pooling_seeds/
+│   ├── wavelet_pooling_seeds/
+│   ├── v1/                            # Experimentos anteriores
+│   ├── v2/                            # Experimentos anteriores
+│   └── v2.1/
 ├── results/
-│   └── v2/
-│       ├── max_results.csv
-│       ├── average_results.csv
-│       ├── wavelet_results.csv
-│       ├── training_max.csv
-│       ├── training_average.csv
-│       └── training_db*.csv
-└── (pastas locais criadas em execução)
-    ├── Data/                          # Features e metadados gerados localmente
-    └── DS_10283_3336/                 # Dataset ASVspoof 2019 LA não versionado
+│   └── v2.5/                          # Resultados oficiais
+└── (pastas locais, não versionadas)
+    └── Data/
+        ├── *_features.npy
+        ├── *_meta.csv
+        ├── DS_10283_3336/             # ASVspoof 2019 LA
+        └── ASVspoof2021_LA_eval/      # ASVspoof 2021 LA eval
 ```
 
-As pastas `Data/` e `DS_10283_3336/` não ficam no Git e são criadas localmente quando você baixa o dataset e executa o pré-processamento.
+Os notebooks oficiais da v2.5 são:
+
+| Pasta | Notebooks | Modelo |
+| --- | --- | --- |
+| `notebooks/max_pooling_seeds/` | `cnn_max_pooling_{42,49,51,69,73}.ipynb` | CNN com `MaxPool2d` |
+| `notebooks/average_pooling_seeds/` | `cnn_average_pooling_{42,49,51,69,73}.ipynb` | CNN com `AvgPool2d` |
+| `notebooks/wavelet_pooling_seeds/` | `custom_wavelet_cnn_model_low_freq_mask_seed_{42,49,51,69,73}.ipynb` | CNN com pooling wavelet (cA) e SpecAugment |
+
+As pastas `notebooks/v1/`, `notebooks/v2/` e `notebooks/v2.1/` guardam apenas experimentos anteriores.
 
 ## Requisitos
 
-- Python 3.12
+- Python 3.12 ou 3.13
 - pip
-- Espaço em disco para o ASVspoof 2019 LA e para a pasta `Data/` (vários GB)
+- Espaço em disco para o ASVspoof 2019 LA, o eval do ASVspoof 2021 LA e a pasta `Data/` (vários GB)
 - GPU opcional: CUDA ou Apple Silicon (MPS). Sem GPU, o treino usa CPU.
 
 ## Instalação
@@ -65,24 +72,18 @@ venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
-O `pandas` está incluído no `requirements.txt`. Para executar os notebooks fora do VS Code/Cursor, instale também o Jupyter:
-
-```bash
-pip install jupyter
-```
-
 ## Dataset
 
-Os notebooks esperam o ASVspoof 2019 LA em:
+O pré-processamento espera o ASVspoof 2019 LA em:
 
 ```text
-DS_10283_3336/LA/
+Data/DS_10283_3336/LA/
 ```
 
-Baixe o conjunto **ASVspoof 2019** no [Edinburgh DataShare (DS_10283_3336)](https://datashare.ed.ac.uk/handle/10283/3336) e extraia o conteúdo na raiz do projeto, de forma que a árvore fique assim:
+Baixe o conjunto **ASVspoof 2019** no [Edinburgh DataShare (DS_10283_3336)](https://datashare.ed.ac.uk/handle/10283/3336) e extraia o conteúdo em `Data/`, de forma que a árvore fique assim:
 
 ```text
-DS_10283_3336/LA/
+Data/DS_10283_3336/LA/
 ├── ASVspoof2019_LA_cm_protocols/
 │   ├── ASVspoof2019.LA.cm.train.trn.txt
 │   ├── ASVspoof2019.LA.cm.dev.trl.txt
@@ -92,13 +93,21 @@ DS_10283_3336/LA/
 └── ASVspoof2019_LA_eval/flac/
 ```
 
-Se o caminho for diferente, altere `base_dataset_path` em `notebooks/normalize_data.ipynb`.
+A avaliação cruzada no ASVspoof 2021 espera:
+
+```text
+Data/ASVspoof2021_LA_eval/
+├── flac/
+└── trial_metadata.txt
+```
+
+Se o caminho do ASVspoof 2019 for diferente, altere `base_dataset_path` em `notebooks/normalize_data.ipynb`.
 
 ## Data
 
 A pasta `Data/` **não entra no repositório** (está no `.gitignore`). Os arquivos de features podem ocupar vários GB e passam do limite de push do GitHub.
 
-Ela é criada ao rodar `notebooks/normalize_data.ipynb` e fica na raiz do projeto:
+Ela é criada ao rodar `notebooks/normalize_data.ipynb`:
 
 ```text
 Data/
@@ -107,12 +116,14 @@ Data/
 ├── dev_features.npy
 ├── dev_meta.csv
 ├── eval_features.npy
-└── eval_meta.csv
+├── eval_meta.csv
+├── eval_2021_features.npy
+└── eval_2021_meta.csv
 ```
 
 Cada `*_features.npy` armazena MFCC e LFCC em `float16`, com shape `(amostras, 2, 20, 401)`. Os arquivos `*_meta.csv` armazenam filename, speaker, tipo de ataque e a classe `is_bonafide`.
 
-Os notebooks de treino carregam as features com memory mapping a partir de `../Data/`, convertem os dois canais cepstrais para uma entrada de 40 × 401 e normalizam train, dev e eval com as estatísticas do conjunto de treino. Sem esses arquivos, o pré-processamento precisa ser executado novamente.
+Os notebooks de treino da v2.5 carregam as features com memory mapping a partir de `../../Data/`, convertem os dois canais cepstrais para uma entrada de 40 × 401 e normalizam train, dev, eval 2019 e eval 2021 com as estatísticas do conjunto de treino.
 
 ## Rodar os notebooks
 
@@ -124,53 +135,75 @@ jupyter notebook
 
 Ou, no VS Code / Cursor, abra a pasta `notebooks/` e selecione o kernel `venv`.
 
-Os caminhos relativos (`../Data/`, `../DS_10283_3336/` e `../results/v2/`) assumem que o notebook está sendo executado a partir de `notebooks/`. No Jupyter, abra os arquivos dessa pasta. Se o working directory for a raiz do projeto, os acessos aos arquivos vão falhar.
+Os caminhos relativos dependem da pasta do notebook:
+
+- `notebooks/normalize_data.ipynb` e `notebooks/analyze_results.ipynb` usam `../Data/` e `../results/v2.5/`
+- os notebooks em `*_pooling_seeds/` usam `../../Data/` e `../../results/v2.5/`
+
+Se o working directory for a raiz do projeto, os acessos aos arquivos vão falhar.
 
 ### Ordem de execução
 
 1. **Pré-processamento (obrigatório se `Data/` estiver vazio)**
    - `notebooks/normalize_data.ipynb`
-   - Lê os FLAC e os protocols.
+   - Lê os FLAC e os protocols do ASVspoof 2019 e do eval 2021.
    - Ajusta cada áudio de 16 kHz para exatamente 4 s, repetindo sinais curtos e truncando sinais longos.
    - Extrai 20 coeficientes MFCC e 20 coeficientes LFCC em 401 frames.
-   - Grava `Data/{train,dev,eval}_features.npy` e `Data/{train,dev,eval}_meta.csv`.
-   - Esta etapa é a mais lenta (percorre train, dev e eval).
+   - Grava `Data/{train,dev,eval,eval_2021}_features.npy` e os `*_meta.csv` correspondentes.
 
-2. **Treino e avaliação (independentes entre si)**  
-   Depois dos arquivos em `Data/` existirem, rode qualquer um destes notebooks. Todos usam seed 42, batch size 32, até 100 épocas, `AdamW`, redução da learning rate e early stopping baseado no EER de desenvolvimento.
+2. **Treino e avaliação (um notebook por seed)**  
+   Depois dos arquivos em `Data/` existirem, rode os notebooks das pastas oficiais. Todos usam até 100 épocas, `AdamW`, redução da learning rate e early stopping baseado no EER de desenvolvimento.
 
-| Notebook | Modelo |
-| --- | --- |
-| `cnn_max_pooling.ipynb` | CNN de referência com `MaxPool2d` |
-| `cnn_average_pooling.ipynb` | CNN de referência com `AvgPool2d` |
-| `custom_wavelet_cnn_model_highest_energy_v2.ipynb` | CNN com pooling wavelet pela sub-banda de maior energia |
+   | Pasta | Batch size | Seeds |
+   | --- | --- | --- |
+   | `max_pooling_seeds/` | 128 | 42, 49, 51, 69, 73 |
+   | `average_pooling_seeds/` | 128 | 42, 49, 51, 69, 73 |
+   | `wavelet_pooling_seeds/` | 32 | 42, 49, 51, 69, 73 |
 
-O notebook wavelet executa as famílias `db4`, `db6`, `db8`, `db14`, `db16`, `db18`, `db24`, `db26`, `db28`, `db34`, `db36` e `db38`.
+   O notebook wavelet executa as famílias `db4`, `db6`, `db8`, `db14`, `db16`, `db18`, `db24`, `db26`, `db28`, `db34`, `db36` e `db38`.
+
+   Cada seed grava um conjunto `v1.x` em `results/v2.5/`:
+
+   | Seed | Saída |
+   | --- | --- |
+   | 42 | `v1.1` |
+   | 51 | `v1.2` |
+   | 73 | `v1.3` |
+   | 69 | `v1.4` |
+   | 49 | `v1.5` |
 
 3. **Análise dos resultados**
    - `notebooks/analyze_results.ipynb`
-   - Carrega os CSVs em `results/v2/`.
-   - Compara EER, ROC AUC e demais métricas entre Max, Average e as famílias wavelet.
-   - Visualiza também os históricos de loss e EER dos treinamentos.
+   - Agrega as 5 seeds de Max, Average e das famílias wavelet.
+   - Calcula média e desvio-padrão do EER no ASVspoof 2019 e no ASVspoof 2021.
+   - Grava os resumos em `results/v2.5/final_results_five_seeds_2019.csv` e `results/v2.5/final_results_five_seeds_2021.csv`.
 
 Execute as células em ordem, de cima para baixo.
 
 ## Resultados gerados
 
-Os notebooks de treino gravam os resultados da versão atual em:
-
 ```text
-results/v2/
-├── max_results.csv
-├── average_results.csv
-├── wavelet_results.csv
-├── training_max.csv
-├── training_average.csv
-└── training_<wavelet>.csv
+results/v2.5/
+├── max/
+│   ├── training_v1.x.csv
+│   ├── 2019_max_results_v1.x.csv
+│   └── 2021_max_results_v1.x.csv
+├── average/
+│   ├── training_v1.x.csv
+│   ├── 2019_average_results_v1.x.csv
+│   └── 2021_average_results_v1.x.csv
+├── wavelets/
+│   └── wavelet_results_v1.x/
+│       ├── 2019_wavelet_results.csv
+│       ├── 2021_wavelet_results.csv
+│       └── training_<wavelet>.csv
+├── final_results_five_seeds_2019.csv
+└── final_results_five_seeds_2021.csv
 ```
 
-- `max_results.csv`, `average_results.csv` e `wavelet_results.csv` contêm loss de avaliação, EER, threshold do EER, accuracy, precision, recall, F1, matriz de confusão e ROC AUC.
+- Os CSVs `2019_*` e `2021_*` guardam as métricas de avaliação de cada seed.
 - Os arquivos `training_*.csv` armazenam loss, EER e learning rate por época.
+- Os arquivos `final_results_five_seeds_*.csv` consolidam média e desvio-padrão do EER nas 5 seeds.
 
 ## Dependências principais
 
@@ -179,7 +212,7 @@ results/v2/
 | `torch` | Modelos, treino e DataLoader |
 | `librosa` | Leitura de áudio, STFT e extração de MFCC/LFCC |
 | `spafe` | Construção do banco de filtros lineares usado no LFCC |
-| `ptwt` | Transformada wavelet 2D nos poolings customizados |
+| `ptwt` | Transformada wavelet 1D no pooling customizado |
 | `scikit-learn` | Métricas de classificação |
 | `pandas` | Metadados, históricos e resultados em CSV |
 | `matplotlib` | Gráficos de loss, EER e ROC |
