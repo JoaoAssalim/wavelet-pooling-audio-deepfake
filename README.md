@@ -142,6 +142,6 @@ Notebooks under `*_pooling_seeds/` read `../../Data/` and write `../../results/v
   year         = {2026},
   publisher    = {Zenodo},
   doi          = {10.5281/zenodo.23339527},
-  url          = {https://doi.org/10.5281/zenodo.23339527}
+  url          = {https://doi.org/10.5281/zenodo.23339526}
 }
 ```
