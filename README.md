@@ -1,218 +1,147 @@
-# Custom CNN Audio DeepFake Detection — v2.5
+# Evaluating Wavelet Pooling over Conventional Pooling in CNNs for Audio Deepfake Detection
 
-Versão oficial e final do projeto de mestrado para detecção de áudio deepfake com CNNs em PyTorch.
+João Vitor Ramos Assalim  
+Department of Computing, São Paulo State University (UNESP), Bauru, Brazil  
+joao.assalim@unesp.br
 
-Os áudios de 16 kHz do **ASVspoof 2019 Logical Access (LA)** são ajustados para 4 segundos e convertidos em representações cepstrais **MFCC** e **LFCC**. O treino usa os splits train/dev do ASVspoof 2019. A avaliação é feita no eval do **ASVspoof 2019 LA** e no eval do **ASVspoof 2021 LA**.
+**Code:** [10.5281/zenodo.23339527](https://doi.org/10.5281/zenodo.23339527)
 
-Três arquiteturas classificam cada amostra como **bonafide** ou **spoof**:
+This repository contains the implementation and results of a comparison between wavelet pooling and conventional pooling in convolutional neural networks for audio deepfake detection. Models are trained on the ASVspoof 2019 Logical Access (LA) partition and evaluated on the ASVspoof 2019 LA and ASVspoof 2021 LA evaluation sets.
 
-- CNN com `MaxPool2d`
-- CNN com `AvgPool2d`
-- CNN com pooling wavelet na banda de aproximação (baixa frequência), com SpecAugment no treino
+## Summary
 
-Cada arquitetura é treinada em **5 seeds**: `42`, `49`, `51`, `69` e `73`.
+Audio is resampled to 16 kHz and fixed at 4 s (64,000 samples). Short recordings are repeated; long recordings are truncated. Each utterance is represented by 20 Mel-frequency cepstral coefficients (MFCC) and 20 linear-frequency cepstral coefficients (LFCC), extracted with a 20 ms window and a 10 ms hop, then concatenated into a \(T \times 40\) feature matrix. Features are standardized with the mean and standard deviation of the training set.
 
-## Estrutura
+The classifier is a CNN with four convolutional blocks. Each block has two \(3 \times 3\) convolutions, batch normalization, and ReLU. Channel width grows from 32 to 256. The first three blocks downsample with one of three pooling operators. The fourth block applies `Dropout2d` (\(p = 0.1\)). Feature maps are reduced by the mean over frequency, then summarized by the mean and standard deviation over time into a 512-dimensional vector. A fully connected classifier (128 units, ReLU, dropout \(p = 0.4\), 2-class output) predicts bonafide or spoof.
+
+Three pooling strategies are compared inside the same backbone:
+
+- Max pooling
+- Average pooling
+- Wavelet pooling: a single-level Daubechies discrete wavelet transform (`wavedec`, `ptwt`), keeping the low-frequency approximation coefficients, followed by average pooling on the frequency axis
+
+Twelve filter supports are evaluated: `db4`, `db6`, `db8`, `db14`, `db16`, `db18`, `db24`, `db26`, `db28`, `db34`, `db36`, and `db38`.
+
+Each of the 14 configurations is trained for up to 100 epochs with Adam (learning rate \(10^{-3}\), weight decay \(10^{-4}\)), binary cross-entropy, batch size 32, and early stopping with patience 10 on the development equal error rate (EER). The checkpoint with the lowest development EER is evaluated on both test sets. Ten random seeds are used. Differences across pooling methods are tested with Autorank (Friedman test and Nemenyi post-hoc).
+
+## Results
+
+EER is reported as median \(\pm\) median absolute deviation over ten seeds.
+
+### ASVspoof 2019 LA
+
+| Architecture | EER |
+| --- | --- |
+| CNN + Wavelet db8 | 0.0628 \(\pm\) 0.0017 |
+| CNN + Wavelet db6 | 0.0660 \(\pm\) 0.0036 |
+| CNN + Wavelet db18 | 0.0663 \(\pm\) 0.0047 |
+| CNN + Wavelet db24 | 0.0668 \(\pm\) 0.0023 |
+| CNN + Wavelet db4 | 0.0679 \(\pm\) 0.0035 |
+| CNN + Max | 0.0684 \(\pm\) 0.0036 |
+| CNN + Wavelet db34 | 0.0690 \(\pm\) 0.0013 |
+| CNN + Wavelet db26 | 0.0694 \(\pm\) 0.0060 |
+| CNN + Average | 0.0694 \(\pm\) 0.0036 |
+| CNN + Wavelet db28 | 0.0699 \(\pm\) 0.0045 |
+| CNN + Wavelet db38 | 0.0703 \(\pm\) 0.0055 |
+| CNN + Wavelet db14 | 0.0724 \(\pm\) 0.0071 |
+| CNN + Wavelet db16 | 0.0734 \(\pm\) 0.0048 |
+| CNN + Wavelet db36 | 0.0758 \(\pm\) 0.0047 |
+| GMM + LFCC | 0.0809 |
+| GMM + CQCC | 0.0957 |
+
+On ASVspoof 2019, the proposed models outperform both official baselines. The lowest EER is CNN + wavelet `db8`.
+
+### ASVspoof 2021 LA
+
+| Architecture | EER |
+| --- | --- |
+| B03 – GMM + CQCC | 0.0926 |
+| B04 – GMM + LFCC | 0.0950 |
+| CNN + Average | 0.1439 \(\pm\) 0.0027 |
+| CNN + Wavelet db24 | 0.1453 \(\pm\) 0.0037 |
+| CNN + Wavelet db26 | 0.1456 \(\pm\) 0.0034 |
+| CNN + Wavelet db18 | 0.1472 \(\pm\) 0.0038 |
+| CNN + Wavelet db6 | 0.1480 \(\pm\) 0.0038 |
+| CNN + Wavelet db4 | 0.1481 \(\pm\) 0.0045 |
+| CNN + Wavelet db8 | 0.1482 \(\pm\) 0.0056 |
+| CNN + Max | 0.1494 \(\pm\) 0.0014 |
+| CNN + Wavelet db16 | 0.1508 \(\pm\) 0.0057 |
+| CNN + Wavelet db14 | 0.1511 \(\pm\) 0.0026 |
+| CNN + Wavelet db34 | 0.1522 \(\pm\) 0.0064 |
+| CNN + Wavelet db36 | 0.1532 \(\pm\) 0.0047 |
+| CNN + Wavelet db28 | 0.1549 \(\pm\) 0.0049 |
+| CNN + Wavelet db38 | 0.1553 \(\pm\) 0.0061 |
+| B01 – LFCC-LCNN | 0.1562 |
+| B02 – LFCC-GMM | 0.1930 |
+
+On ASVspoof 2021, B03 and B04 remain below the proposed models. Every proposed model remains below B01 and B02. The lowest EER among the proposed models is CNN + average pooling.
+
+The Friedman test does not reject equal central tendency across pooling methods (\(p = 0.071\)). The Nemenyi post-hoc test (critical distance 6.274) finds a difference only between `db8` and `db36` on ASVspoof 2019. Shorter Daubechies supports rank above longer supports. No pairwise difference is found on ASVspoof 2021.
+
+## Repository
 
 ```text
 .
-├── README.md
-├── requirements.txt
 ├── notebooks/
 │   ├── normalize_data.ipynb
-│   ├── analyze_results.ipynb
 │   ├── max_pooling_seeds/
 │   ├── average_pooling_seeds/
 │   ├── wavelet_pooling_seeds/
-│   ├── v1/                            # Experimentos anteriores
-│   ├── v2/                            # Experimentos anteriores
-│   └── v2.1/
-├── results/
-│   └── v2.5/                          # Resultados oficiais
-└── (pastas locais, não versionadas)
-    └── Data/
-        ├── *_features.npy
-        ├── *_meta.csv
-        ├── DS_10283_3336/             # ASVspoof 2019 LA
-        └── ASVspoof2021_LA_eval/      # ASVspoof 2021 LA eval
+│   ├── analyze_results.ipynb
+│   └── statistical_analysis.ipynb
+├── results/v2.5/
+└── requirements.txt
 ```
 
-Os notebooks oficiais da v2.5 são:
+Seeds: `32`, `42`, `49`, `51`, `69`, `73`, `81`, `91`, `99`, `101`.
 
-| Pasta | Notebooks | Modelo |
-| --- | --- | --- |
-| `notebooks/max_pooling_seeds/` | `cnn_max_pooling_{42,49,51,69,73}.ipynb` | CNN com `MaxPool2d` |
-| `notebooks/average_pooling_seeds/` | `cnn_average_pooling_{42,49,51,69,73}.ipynb` | CNN com `AvgPool2d` |
-| `notebooks/wavelet_pooling_seeds/` | `custom_wavelet_cnn_model_low_freq_mask_seed_{42,49,51,69,73}.ipynb` | CNN com pooling wavelet (cA) e SpecAugment |
+| Seed | Output directory |
+| --- | --- |
+| 42 | `v1.1` |
+| 51 | `v1.2` |
+| 73 | `v1.3` |
+| 69 | `v1.4` |
+| 49 | `v1.5` |
+| 99 | `v1.6` |
+| 101 | `v1.7` |
+| 32 | `v1.8` |
+| 81 | `v1.9` |
+| 91 | `v1.10` |
 
-As pastas `notebooks/v1/`, `notebooks/v2/` e `notebooks/v2.1/` guardam apenas experimentos anteriores.
+`Data/` is not versioned. Feature arrays are stored as `float16` with shape `(N, 2, 20, 401)`.
 
-## Requisitos
+## Reproduction
 
-- Python 3.12 ou 3.13
-- pip
-- Espaço em disco para o ASVspoof 2019 LA, o eval do ASVspoof 2021 LA e a pasta `Data/` (vários GB)
-- GPU opcional: CUDA ou Apple Silicon (MPS). Sem GPU, o treino usa CPU.
-
-## Instalação
-
-Na raiz do repositório:
+Python 3.13. The experiments reported in the paper were run on an AMD Ryzen 5 8400F, 32 GB RAM, and an NVIDIA RTX 2060 (6 GB).
 
 ```bash
 python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
-```
-
-No Windows:
-
-```bash
-python -m venv venv
-venv\Scripts\activate
-pip install -r requirements.txt
-```
-
-## Dataset
-
-O pré-processamento espera o ASVspoof 2019 LA em:
-
-```text
-Data/DS_10283_3336/LA/
-```
-
-Baixe o conjunto **ASVspoof 2019** no [Edinburgh DataShare (DS_10283_3336)](https://datashare.ed.ac.uk/handle/10283/3336) e extraia o conteúdo em `Data/`, de forma que a árvore fique assim:
-
-```text
-Data/DS_10283_3336/LA/
-├── ASVspoof2019_LA_cm_protocols/
-│   ├── ASVspoof2019.LA.cm.train.trn.txt
-│   ├── ASVspoof2019.LA.cm.dev.trl.txt
-│   └── ASVspoof2019.LA.cm.eval.trl.txt
-├── ASVspoof2019_LA_train/flac/
-├── ASVspoof2019_LA_dev/flac/
-└── ASVspoof2019_LA_eval/flac/
-```
-
-A avaliação cruzada no ASVspoof 2021 espera:
-
-```text
-Data/ASVspoof2021_LA_eval/
-├── flac/
-└── trial_metadata.txt
-```
-
-Se o caminho do ASVspoof 2019 for diferente, altere `base_dataset_path` em `notebooks/normalize_data.ipynb`.
-
-## Data
-
-A pasta `Data/` **não entra no repositório** (está no `.gitignore`). Os arquivos de features podem ocupar vários GB e passam do limite de push do GitHub.
-
-Ela é criada ao rodar `notebooks/normalize_data.ipynb`:
-
-```text
-Data/
-├── train_features.npy
-├── train_meta.csv
-├── dev_features.npy
-├── dev_meta.csv
-├── eval_features.npy
-├── eval_meta.csv
-├── eval_2021_features.npy
-└── eval_2021_meta.csv
-```
-
-Cada `*_features.npy` armazena MFCC e LFCC em `float16`, com shape `(amostras, 2, 20, 401)`. Os arquivos `*_meta.csv` armazenam filename, speaker, tipo de ataque e a classe `is_bonafide`.
-
-Os notebooks de treino da v2.5 carregam as features com memory mapping a partir de `../../Data/`, convertem os dois canais cepstrais para uma entrada de 40 × 401 e normalizam train, dev, eval 2019 e eval 2021 com as estatísticas do conjunto de treino.
-
-## Rodar os notebooks
-
-Com o ambiente virtual ativo:
-
-```bash
 jupyter notebook
 ```
 
-Ou, no VS Code / Cursor, abra a pasta `notebooks/` e selecione o kernel `venv`.
+Place ASVspoof 2019 LA at `Data/DS_10283_3336/LA/` ([Edinburgh DataShare DS_10283_3336](https://datashare.ed.ac.uk/handle/10283/3336)) and ASVspoof 2021 LA eval at `Data/ASVspoof2021_LA_eval/` (`flac/` and `trial_metadata.txt`).
 
-Os caminhos relativos dependem da pasta do notebook:
+Run the notebooks from their own directories, in this order:
 
-- `notebooks/normalize_data.ipynb` e `notebooks/analyze_results.ipynb` usam `../Data/` e `../results/v2.5/`
-- os notebooks em `*_pooling_seeds/` usam `../../Data/` e `../../results/v2.5/`
+1. `notebooks/normalize_data.ipynb` — duration normalization, MFCC/LFCC extraction, and metadata.
+2. One notebook per seed in `notebooks/max_pooling_seeds/`, `notebooks/average_pooling_seeds/`, and `notebooks/wavelet_pooling_seeds/`.
+3. `notebooks/analyze_results.ipynb` — mean and standard deviation of EER across the ten seeds (`results/v2.5/final_results_ten_seeds_2019.csv`, `results/v2.5/final_results_ten_seeds_2021.csv`).
+4. `notebooks/statistical_analysis.ipynb` — Friedman and Nemenyi tests.
 
-Se o working directory for a raiz do projeto, os acessos aos arquivos vão falhar.
+Notebooks under `*_pooling_seeds/` read `../../Data/` and write `../../results/v2.5/`.
 
-### Ordem de execução
+## Citation
 
-1. **Pré-processamento (obrigatório se `Data/` estiver vazio)**
-   - `notebooks/normalize_data.ipynb`
-   - Lê os FLAC e os protocols do ASVspoof 2019 e do eval 2021.
-   - Ajusta cada áudio de 16 kHz para exatamente 4 s, repetindo sinais curtos e truncando sinais longos.
-   - Extrai 20 coeficientes MFCC e 20 coeficientes LFCC em 401 frames.
-   - Grava `Data/{train,dev,eval,eval_2021}_features.npy` e os `*_meta.csv` correspondentes.
-
-2. **Treino e avaliação (um notebook por seed)**  
-   Depois dos arquivos em `Data/` existirem, rode os notebooks das pastas oficiais. Todos usam até 100 épocas, `AdamW`, redução da learning rate e early stopping baseado no EER de desenvolvimento.
-
-   | Pasta | Batch size | Seeds |
-   | --- | --- | --- |
-   | `max_pooling_seeds/` | 128 | 42, 49, 51, 69, 73 |
-   | `average_pooling_seeds/` | 128 | 42, 49, 51, 69, 73 |
-   | `wavelet_pooling_seeds/` | 32 | 42, 49, 51, 69, 73 |
-
-   O notebook wavelet executa as famílias `db4`, `db6`, `db8`, `db14`, `db16`, `db18`, `db24`, `db26`, `db28`, `db34`, `db36` e `db38`.
-
-   Cada seed grava um conjunto `v1.x` em `results/v2.5/`:
-
-   | Seed | Saída |
-   | --- | --- |
-   | 42 | `v1.1` |
-   | 51 | `v1.2` |
-   | 73 | `v1.3` |
-   | 69 | `v1.4` |
-   | 49 | `v1.5` |
-
-3. **Análise dos resultados**
-   - `notebooks/analyze_results.ipynb`
-   - Agrega as 5 seeds de Max, Average e das famílias wavelet.
-   - Calcula média e desvio-padrão do EER no ASVspoof 2019 e no ASVspoof 2021.
-   - Grava os resumos em `results/v2.5/final_results_five_seeds_2019.csv` e `results/v2.5/final_results_five_seeds_2021.csv`.
-
-Execute as células em ordem, de cima para baixo.
-
-## Resultados gerados
-
-```text
-results/v2.5/
-├── max/
-│   ├── training_v1.x.csv
-│   ├── 2019_max_results_v1.x.csv
-│   └── 2021_max_results_v1.x.csv
-├── average/
-│   ├── training_v1.x.csv
-│   ├── 2019_average_results_v1.x.csv
-│   └── 2021_average_results_v1.x.csv
-├── wavelets/
-│   └── wavelet_results_v1.x/
-│       ├── 2019_wavelet_results.csv
-│       ├── 2021_wavelet_results.csv
-│       └── training_<wavelet>.csv
-├── final_results_five_seeds_2019.csv
-└── final_results_five_seeds_2021.csv
+```bibtex
+@software{assalim2026wavelet_pooling,
+  author       = {Assalim, João Vitor Ramos},
+  title        = {Evaluating Wavelet Pooling over Conventional
+                  Pooling in CNNs for Audio Deepfake Detection},
+  year         = {2026},
+  publisher    = {Zenodo},
+  doi          = {10.5281/zenodo.23339527},
+  url          = {https://doi.org/10.5281/zenodo.23339527}
+}
 ```
-
-- Os CSVs `2019_*` e `2021_*` guardam as métricas de avaliação de cada seed.
-- Os arquivos `training_*.csv` armazenam loss, EER e learning rate por época.
-- Os arquivos `final_results_five_seeds_*.csv` consolidam média e desvio-padrão do EER nas 5 seeds.
-
-## Dependências principais
-
-| Pacote | Uso |
-| --- | --- |
-| `torch` | Modelos, treino e DataLoader |
-| `librosa` | Leitura de áudio, STFT e extração de MFCC/LFCC |
-| `spafe` | Construção do banco de filtros lineares usado no LFCC |
-| `ptwt` | Transformada wavelet 1D no pooling customizado |
-| `scikit-learn` | Métricas de classificação |
-| `pandas` | Metadados, históricos e resultados em CSV |
-| `matplotlib` | Gráficos de loss, EER e ROC |
