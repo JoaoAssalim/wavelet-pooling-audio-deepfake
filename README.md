@@ -4,135 +4,162 @@ João Vitor Ramos Assalim
 Department of Computing, São Paulo State University (UNESP), Bauru, Brazil  
 joao.assalim@unesp.br
 
-**Code:** [10.5281/zenodo.23339527](https://doi.org/10.5281/zenodo.23339527)
+This repository compares wavelet-packet pooling with max and average pooling in a 1D CNN that works directly on raw audio. Models are trained on the ASVspoof 2019 Logical Access (LA) partition and evaluated on the ASVspoof 2019 LA evaluation set. Evaluation on ASVspoof 2021 LA is prepared in the code but currently disabled (see [Known issues](#known-issues)).
 
-This repository contains the implementation and results of a comparison between wavelet pooling and conventional pooling in convolutional neural networks for audio deepfake detection. Models are trained on the ASVspoof 2019 Logical Access (LA) partition and evaluated on the ASVspoof 2019 LA and ASVspoof 2021 LA evaluation sets.
+The backbone is identical for every run; only the pooling layer changes. Wavelet pooling keeps a single node of a wavelet packet decomposition, so sweeping all nodes of one level shows how much each frequency subband contributes to detection.
 
-## Summary
+## Method
 
-Audio is resampled to 16 kHz and fixed at 4 s (64,000 samples). Short recordings are repeated; long recordings are truncated. Each utterance is represented by 20 Mel-frequency cepstral coefficients (MFCC) and 20 linear-frequency cepstral coefficients (LFCC), extracted with a 20 ms window and a 10 ms hop, then concatenated into a \(T \times 40\) feature matrix. Features are standardized with the mean and standard deviation of the training set.
+### Input
 
-The classifier is a CNN with four convolutional blocks. Each block has two \(3 \times 3\) convolutions, batch normalization, and ReLU. Channel width grows from 32 to 256. The first three blocks downsample with one of three pooling operators. The fourth block applies `Dropout2d` (\(p = 0.1\)). Feature maps are reduced by the mean over frequency, then summarized by the mean and standard deviation over time into a 512-dimensional vector. A fully connected classifier (128 units, ReLU, dropout \(p = 0.4\), 2-class output) predicts bonafide or spoof.
+Audio is resampled to 16 kHz and fixed at 4 s (64,000 samples). Shorter recordings are zero-padded on both sides (`librosa.util.pad_center`), and longer ones are truncated. Waveforms are stored as `int16`, which is lossless because the source FLACs are 16-bit, and scaled back to `[-1, 1)` (`/ 32768`) when a batch is loaded. No hand-crafted features are extracted.
 
-Three pooling strategies are compared inside the same backbone:
+### Architecture
 
-- Max pooling
-- Average pooling
-- Wavelet pooling: a single-level Daubechies discrete wavelet transform (`wavedec`, `ptwt`), keeping the low-frequency approximation coefficients, followed by average pooling on the frequency axis
+`deepfake/cnn.py` — `CustomCNN(wavelet_family, level, node, pooling)`:
 
-Twelve filter supports are evaluated: `db4`, `db6`, `db8`, `db14`, `db16`, `db18`, `db24`, `db26`, `db28`, `db34`, `db36`, and `db38`.
+| Stage | Layers | Channels | Length |
+| --- | --- | --- | --- |
+| Pre-pooling | 2 × (Conv1d k=3 + BatchNorm), **no ReLU** | 1 → 16 → 16 | 64,000 |
+| Pooling | max / average / wavelet, factor \(2^L\) | 16 | ≈ 64,000 / \(2^L\) |
+| Block 1 | 2 × (Conv1d k=3 + BatchNorm + ReLU) | 16 → 64 → 64 | |
+| Block 2 | 2 × (Conv1d k=3 + BatchNorm + ReLU) | 64 → 128 → 128 | |
+| Block 3 | 2 × (Conv1d k=3 + BatchNorm + ReLU) + `Dropout1d(0.1)` | 128 → 256 → 256 | |
+| Statistics | mean and standard deviation over time | 512 | |
+| Classifier | Linear 128 + ReLU + Dropout 0.4 + Linear 2 | | |
 
-Each of the 14 configurations is trained for up to 100 epochs with Adam (learning rate \(10^{-3}\), weight decay \(10^{-4}\)), binary cross-entropy, batch size 32, and early stopping with patience 10 on the development equal error rate (EER). The checkpoint with the lowest development EER is evaluated on both test sets. Ten random seeds are used. Differences across pooling methods are tested with Autorank (Friedman test and Nemenyi post-hoc).
+The convolutions before the pooling are linear, so the pooled signal is a true subband of a linear filtering of the input. ReLU is applied only after the pooling.
 
-## Results
+### Pooling layers
 
-EER is reported as median \(\pm\) median absolute deviation over ten seeds.
+There is a single pooling, and its downsampling factor \(2^L\) is the same for all three methods:
 
-### ASVspoof 2019 LA
+- **Max:** `MaxPool1d(kernel_size=2**L, ceil_mode=True)`.
+- **Average:** `AvgPool1d(kernel_size=2**L, ceil_mode=True)`.
+- **Wavelet:** `WaveletPooling` returns one node of a level-\(L\) wavelet packet decomposition (`deepfake/features.py: get_node`). For a node path such as `"adad"`, each character is one analysis step: reflect padding, then a depthwise `conv1d` with the low-pass (`a`) or high-pass (`d`) filter and stride 2. Only the filters along the path are computed, rather than the full tree. The output equals `ptwt.WaveletPacket(...)[node]` (relative error ~1e-16), and the original `ptwt` version is kept commented in the same file.
 
-| Architecture | EER |
+Nodes come from `frequency_ordered_nodes(L)` (`deepfake/data.py`), which returns `ptwt`'s `get_level(L)` in frequency (Gray-code) order. A level-\(L\) decomposition has \(2^L\) nodes. The longest meaningful level for 64,000 samples is 15, and the study targets the middle level, \(L = 8\) (256 nodes, ~250–324 samples per node depending on the filter length).
+
+Daubechies families evaluated by default: `db4`, `db8`, `db16`, `db24`, `db38`. The longer list (`db4`–`db38`, 12 families) is kept commented in `train_models.py`.
+
+### Training
+
+| Setting | Value |
 | --- | --- |
-| CNN + Wavelet db8 | 0.0628 \(\pm\) 0.0017 |
-| CNN + Wavelet db6 | 0.0660 \(\pm\) 0.0036 |
-| CNN + Wavelet db18 | 0.0663 \(\pm\) 0.0047 |
-| CNN + Wavelet db24 | 0.0668 \(\pm\) 0.0023 |
-| CNN + Wavelet db4 | 0.0679 \(\pm\) 0.0035 |
-| CNN + Max | 0.0684 \(\pm\) 0.0036 |
-| CNN + Wavelet db34 | 0.0690 \(\pm\) 0.0013 |
-| CNN + Wavelet db26 | 0.0694 \(\pm\) 0.0060 |
-| CNN + Average | 0.0694 \(\pm\) 0.0036 |
-| CNN + Wavelet db28 | 0.0699 \(\pm\) 0.0045 |
-| CNN + Wavelet db38 | 0.0703 \(\pm\) 0.0055 |
-| CNN + Wavelet db14 | 0.0724 \(\pm\) 0.0071 |
-| CNN + Wavelet db16 | 0.0734 \(\pm\) 0.0048 |
-| CNN + Wavelet db36 | 0.0758 \(\pm\) 0.0047 |
-| GMM + LFCC | 0.0809 |
-| GMM + CQCC | 0.0957 |
+| Loss | Cross-entropy with class weights (`total / (2 · n_class)`) |
+| Optimizer | AdamW, lr \(10^{-4}\), weight decay \(10^{-4}\) |
+| Scheduler | `ReduceLROnPlateau` on dev EER (factor 0.1, patience 3, min lr \(10^{-6}\)) |
+| Batch size | 32 |
+| Epochs | up to 30 |
+| Early stopping | patience 5 on dev EER |
+| Score | log-likelihood ratio, `logit[bonafide] − logit[spoof]` |
 
-On ASVspoof 2019, the proposed models outperform both official baselines. The lowest EER is CNN + wavelet `db8`.
-
-### ASVspoof 2021 LA
-
-| Architecture | EER |
-| --- | --- |
-| B03 – GMM + CQCC | 0.0926 |
-| B04 – GMM + LFCC | 0.0950 |
-| CNN + Average | 0.1439 \(\pm\) 0.0027 |
-| CNN + Wavelet db24 | 0.1453 \(\pm\) 0.0037 |
-| CNN + Wavelet db26 | 0.1456 \(\pm\) 0.0034 |
-| CNN + Wavelet db18 | 0.1472 \(\pm\) 0.0038 |
-| CNN + Wavelet db6 | 0.1480 \(\pm\) 0.0038 |
-| CNN + Wavelet db4 | 0.1481 \(\pm\) 0.0045 |
-| CNN + Wavelet db8 | 0.1482 \(\pm\) 0.0056 |
-| CNN + Max | 0.1494 \(\pm\) 0.0014 |
-| CNN + Wavelet db16 | 0.1508 \(\pm\) 0.0057 |
-| CNN + Wavelet db14 | 0.1511 \(\pm\) 0.0026 |
-| CNN + Wavelet db34 | 0.1522 \(\pm\) 0.0064 |
-| CNN + Wavelet db36 | 0.1532 \(\pm\) 0.0047 |
-| CNN + Wavelet db28 | 0.1549 \(\pm\) 0.0049 |
-| CNN + Wavelet db38 | 0.1553 \(\pm\) 0.0061 |
-| B01 – LFCC-LCNN | 0.1562 |
-| B02 – LFCC-GMM | 0.1930 |
-
-On ASVspoof 2021, B03 and B04 remain below the proposed models. Every proposed model remains below B01 and B02. The lowest EER among the proposed models is CNN + average pooling.
-
-The Friedman test does not reject equal central tendency across pooling methods (\(p = 0.071\)). The Nemenyi post-hoc test (critical distance 6.274) finds a difference only between `db8` and `db36` on ASVspoof 2019. Shorter Daubechies supports rank above longer supports. No pairwise difference is found on ASVspoof 2021.
+The checkpoint with the lowest dev EER is evaluated on ASVspoof 2019 LA eval. Results report EER and ROC AUC.
 
 ## Repository
 
 ```text
 .
-├── notebooks/
-│   ├── normalize_data.ipynb
-│   ├── max_pooling_seeds/
-│   ├── average_pooling_seeds/
-│   ├── wavelet_pooling_seeds/
-│   ├── analyze_results.ipynb
-│   └── statistical_analysis.ipynb
-├── results/v2.5/
+├── load_dataset.py          # FLAC -> int16 memmaps in datasets/waveforms/
+├── train_models.py          # training loop over poolings x wavelets x nodes x seeds
+├── deepfake/
+│   ├── data.py              # load_data_split, frequency_ordered_nodes
+│   ├── features.py          # get_node (wavelet packet node), SubbandDataset
+│   ├── cnn.py               # CustomCNN, WaveletPooling, make_pooling
+│   ├── training.py          # train/evaluate loops, early stopping, class weights
+│   └── metrics.py           # EER, LLR score
+├── datasets/waveforms/      # generated, not versioned
+├── results/train_all/       # results.csv + runs/
 └── requirements.txt
 ```
 
-Seeds: `32`, `42`, `49`, `51`, `69`, `73`, `81`, `91`, `99`, `101`.
+### Data files
 
-| Seed | Output directory |
-| --- | --- |
-| 42 | `v1.1` |
-| 51 | `v1.2` |
-| 73 | `v1.3` |
-| 69 | `v1.4` |
-| 49 | `v1.5` |
-| 99 | `v1.6` |
-| 101 | `v1.7` |
-| 32 | `v1.8` |
-| 81 | `v1.9` |
-| 91 | `v1.10` |
+`load_dataset.py` writes one memmap `.npy` file of shape `(N, 64000)` with dtype `int16` per split, plus a `<split>_meta.csv` holding `filename`, `speaker`, `attack` and `is_bonafide`:
 
-`Data/` is not versioned. Feature arrays are stored as `float16` with shape `(N, 2, 20, 401)`.
+| Split | Utterances | Size |
+| --- | --- | --- |
+| `train_2019` | 25,380 | 3.2 GB |
+| `dev_2019` | 24,844 | 3.2 GB |
+| `eval_2019` | 71,237 | 9.1 GB |
+| `eval_2021` | 181,566 | 23.2 GB |
+
+`load_data_split` opens these files with `mmap_mode="r"`, so a split is never loaded into RAM all at once. Batches are read from disk through the page cache.
+
+### Outputs
+
+Each finished run appends one row to `results/train_all/results.csv`:
+
+```text
+seed, pooling, wavelet, node, eval_split, eer, roc_auc, best_epoch, best_dev_eer, train_time_s
+```
+
+The run also writes `history.csv` (loss, EER and lr per epoch) and `model.pt` (best `state_dict`) to `results/train_all/runs/<pooling>/<wavelet>/<node>/seed_<seed>/`. Max and average runs have no wavelet or node, so they go to `runs/<pooling>/seed_<seed>/`.
+
+Runs already listed in `results.csv` are skipped, so an interrupted sweep resumes where it stopped.
 
 ## Reproduction
 
-Python 3.13. The experiments reported in the paper were run on an AMD Ryzen 5 8400F, 32 GB RAM, and an NVIDIA RTX 2060 (6 GB).
+Python 3.13; the requirements pin CUDA 13.0 builds of PyTorch (RTX 5060 Ti, Blackwell).
 
 ```bash
 python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
-jupyter notebook
 ```
 
-Place ASVspoof 2019 LA at `Data/DS_10283_3336/LA/` ([Edinburgh DataShare DS_10283_3336](https://datashare.ed.ac.uk/handle/10283/3336)) and ASVspoof 2021 LA eval at `Data/ASVspoof2021_LA_eval/` (`flac/` and `trial_metadata.txt`).
+Place the corpora one directory above the repository:
 
-Run the notebooks from their own directories, in this order:
+- ASVspoof 2019 LA at `../Data/LA/LA/` ([Edinburgh DataShare DS_10283_3336](https://datashare.ed.ac.uk/handle/10283/3336)).
+- ASVspoof 2021 LA eval at `../Data/ASVspoof2021_LA_eval/ASVspoof2021_LA_eval/` (`flac/` and `trial_metadata.txt`).
 
-1. `notebooks/normalize_data.ipynb` — duration normalization, MFCC/LFCC extraction, and metadata.
-2. One notebook per seed in `notebooks/max_pooling_seeds/`, `notebooks/average_pooling_seeds/`, and `notebooks/wavelet_pooling_seeds/`.
-3. `notebooks/analyze_results.ipynb` — mean and standard deviation of EER across the ten seeds (`results/v2.5/final_results_ten_seeds_2019.csv`, `results/v2.5/final_results_ten_seeds_2021.csv`).
-4. `notebooks/statistical_analysis.ipynb` — Friedman and Nemenyi tests.
+Build the waveform cache (once):
 
-Notebooks under `*_pooling_seeds/` read `../../Data/` and write `../../results/v2.5/`.
+```bash
+python load_dataset.py
+```
 
-## Citation
+Train:
+
+```bash
+python train_models.py --seeds 42
+```
+
+| Argument | Default | Description |
+| --- | --- | --- |
+| `--seeds` | `42` | One or more random seeds |
+| `--poolings` | `average max wavelet` | Pooling methods to run |
+| `--wavelets` | `WAVELET_FAMILIES` | Daubechies families for wavelet pooling |
+| `--nodes` | all nodes of `WAVELET_LEVEL` | Subset of wavelet packet nodes |
+| `--results-dir` | `results/train_all` | Output directory |
+
+The decomposition level is the `WAVELET_LEVEL` constant in `train_models.py` (currently `3`; the study targets `8`). `--keep-cache` and `--num-workers` are parsed but not used yet.
+
+Each epoch prints one line:
+
+```text
+Epoch 01/30 | LR: 0.000100 | Train Loss: 0.4123 | Train EER: 12.3456% | Dev Loss: 0.3890 | Dev EER: 9.8765% | ES Counter: 0/5 | Time: 127s
+```
+
+### Compute cost
+
+Measured on an RTX 5060 Ti with batch size 32. The figures are minutes per epoch (train + dev):
+
+| Level | Wavelet pooling (`db4`–`db38`) | Max / average |
+| --- | --- | --- |
+| 3 | 2.0–2.5 (mean 2.2) | 1.8 |
+| 8 | 0.5–1.0 (mean 0.8) | 0.3 |
+
+At level 8 one seed means \(256 \times |\text{wavelets}| + 2\) runs. With 5 families and ~15 epochs per run, that is about 11 days.
+
+## Known issues
+
+- **Corrupted ASVspoof 2021 FLACs.** In a sample of 1,000 files from the local copy, 439 fail `flac -t` (CRC error). `soundfile` 0.12.1 (libsndfile 1.2.0), which is pinned in `requirements.txt`, decodes them silently into garbage with \(|x| > 1\). Newer versions reject them. Re-download the corpus, check it with `flac -t`, and rebuild `eval_2021.npy` before enabling the 2021 evaluation in `train_models.py`.
+- **Resume for max/average.** `done_runs` reads `results.csv` without `keep_default_na=False`. The empty `wavelet` and `node` fields then become `"nan"`, so finished max/average runs are not recognized and are trained again.
+
+## Previous version
+
+An earlier version of this study used MFCC + LFCC features with a 2D CNN and single-level DWT pooling. Its code and results are archived on Zenodo:
 
 ```bibtex
 @software{assalim2026wavelet_pooling,
