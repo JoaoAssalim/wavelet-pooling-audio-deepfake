@@ -4,7 +4,7 @@ João Vitor Ramos Assalim
 Department of Computing, São Paulo State University (UNESP), Bauru, Brazil  
 joao.assalim@unesp.br
 
-This repository compares wavelet-packet pooling with max and average pooling in a 1D CNN that works directly on raw audio. Models are trained on the ASVspoof 2019 Logical Access (LA) partition and evaluated on the ASVspoof 2019 LA evaluation set. Evaluation on ASVspoof 2021 LA is prepared in the code but currently disabled (see [Known issues](#known-issues)).
+This repository compares wavelet-packet pooling with max and average pooling in a 1D CNN that works directly on raw audio. Models are trained on the ASVspoof 2019 Logical Access (LA) partition and evaluated on the ASVspoof 2019 LA evaluation set. The saved checkpoints are then evaluated on ASVspoof 2021 LA in a separate pass (`evaluate_out_datasets.py`).
 
 The backbone is identical for every run; only the pooling layer changes. Wavelet pooling keeps a single node of a wavelet packet decomposition, so sweeping all nodes of one level shows how much each frequency subband contributes to detection.
 
@@ -111,7 +111,7 @@ pip install -r requirements.txt
 Place the corpora one directory above the repository:
 
 - ASVspoof 2019 LA at `../Data/LA/LA/` ([Edinburgh DataShare DS_10283_3336](https://datashare.ed.ac.uk/handle/10283/3336)).
-- ASVspoof 2021 LA eval at `../Data/ASVspoof2021_LA_eval/ASVspoof2021_LA_eval/` (`flac/` and `trial_metadata.txt`).
+- ASVspoof 2021 LA eval at `../Data/ASVspoof2021_LA_eval/ASVspoof2021_LA_eval/` (`flac/` from [Zenodo 4837263](https://zenodo.org/records/4837263), MD5 `2abee34d8b0b91159555fc4f016e4562`). The labels in `trial_metadata.txt` are not part of that archive; they come from the ASVspoof 2021 keys package (`LA-keys-full.tar.gz`, `keys/LA/CM/trial_metadata.txt`) and must be copied into the same folder.
 
 Build the waveform cache (once):
 
@@ -123,6 +123,12 @@ Train:
 
 ```bash
 python train_models.py --seeds 42
+```
+
+Evaluate the saved checkpoints on ASVspoof 2021 LA (same arguments; appends `ASVspoof 2021` rows to `results.csv`):
+
+```bash
+python evaluate_out_datasets.py --seeds 42
 ```
 
 | Argument | Default | Description |
@@ -154,8 +160,16 @@ At level 8 one seed means \(256 \times |\text{wavelets}| + 2\) runs. With 5 fami
 
 ## Known issues
 
-- **Corrupted ASVspoof 2021 FLACs.** In a sample of 1,000 files from the local copy, 439 fail `flac -t` (CRC error). `soundfile` 0.12.1 (libsndfile 1.2.0), which is pinned in `requirements.txt`, decodes them silently into garbage with \(|x| > 1\). Newer versions reject them. Re-download the corpus, check it with `flac -t`, and rebuild `eval_2021.npy` before enabling the 2021 evaluation in `train_models.py`.
-- **Resume for max/average.** `done_runs` reads `results.csv` without `keep_default_na=False`. The empty `wavelet` and `node` fields then become `"nan"`, so finished max/average runs are not recognized and are trained again.
+- **ASVspoof 2021 FLACs and decoder versions.** The official archive (MD5 verified against Zenodo) contains 181,566 FLACs encoded with libFLAC 1.3.3. Newer decoders (`flac` 1.4.3, and `soundfile` 0.14, which bundles libsndfile 1.2.2) reject 79,645 of them (43.9%) with `LOST_SYNC`. The files are not corrupted. Each FLAC stores the MD5 of the original PCM; comparing it with the decoded audio from `soundfile` 0.12.1 (libsndfile 1.2.0) and from `ffmpeg` gives:
+
+  | Group | Files | Decoded audio |
+  | --- | --- | --- |
+  | passes `flac -t` | 101,921 | identical to the original |
+  | fails `flac -t`, MD5 matches | 59,806 | identical to the original |
+  | fails `flac -t`, MD5 differs | 19,839 (10.9%) | isolated spikes outside the 16-bit range (median 14 samples per file, ~0.04% of the audio) |
+
+  `soundfile` 0.12.1 and `ffmpeg`, two independent decoders, return the same samples for all 181,566 files, so any pipeline that reads the corpus sees the same audio. `load_dataset.py` clips the spikes to the `int16` range. This is why `soundfile` is pinned to 0.12.1: newer versions raise an error on files that decode correctly. Do not use `flac -t` to validate this corpus; check the archive MD5 instead.
+- **Resume for max/average.** `done_runs` in `train_models.py` and `save_eval` in `evaluate_out_datasets.py` read `results.csv` without `keep_default_na=False`. The empty `wavelet` and `node` fields then become `NaN`. As a result, finished max/average runs are trained again, and `save_eval` finds no 2019 row for them (`IndexError`).
 
 ## Previous version
 

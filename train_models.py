@@ -1,45 +1,34 @@
-import random
-import itertools
 import argparse
-import time
 import os
-
-import numpy as np
-import pandas as pd
-import ptwt
+import time
 import torch
-import torch.nn as nn
-import torch.nn.functional as F
+
+import pandas as pd
 from sklearn.metrics import (
     auc,
     roc_curve,
 )
+import torch.nn as nn
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 from torch.utils.data import DataLoader
 
-from deepfake.data import frequency_ordered_nodes, load_data_split
-from deepfake.metrics import compute_eer
+from deepfake.constants import (
+    BATCH_SIZE,
+    EPOCHS,
+    PATIANCE,
+    POOLING_LAYERS,
+    RUN_KEY,
+    WAVELET_FAMILIES,
+    WAVELET_LEVEL
+)
 from deepfake.cnn import CustomCNN
-from deepfake.training import class_weights, run_model, evaluate_and_save
+from deepfake.data import combinations, frequency_ordered_nodes, load_data_split , seed_everything
 from deepfake.features import SubbandDataset
+from deepfake.metrics import compute_eer
+from deepfake.training import class_weights, run_model, evaluate_and_save
 
 
-# WAVELET_FAMILIES = ["db4", "db6", "db8", "db14", "db16", "db18", "db24", "db26", "db28", "db34", "db36", "db38"]
-WAVELET_FAMILIES = ["db4", "db8", "db16", "db24", "db38"]
-WAVELET_LEVEL = 3
 WAVELET_NODES = frequency_ordered_nodes(WAVELET_LEVEL)
-
-POOLING_LAYERS = [
-    "average",
-    "max",
-    "wavelet"
-]
-
-EPOCHS = 30
-PATIANCE = 5 
-BATCH_SIZE = 32
-
-RUN_KEY = ["pooling", "seed", "wavelet", "node"]
 
 
 def parse_args():
@@ -54,30 +43,8 @@ def parse_args():
     return parser.parse_args()
 
 
-def seed_everything(seed):
-    random.seed(seed)
-    np.random.seed(seed)
-    torch.manual_seed(seed)
-    torch.cuda.manual_seed_all(seed)
-
-
 def log(msg):
     print(f"[{time.strftime('%H:%M:%S')}] {msg}", flush=True)
-
-
-def combinations(args):
-    combos = []
-
-    if "wavelet" in args.poolings:
-        combos += list(
-            itertools.product(args.wavelets, args.nodes, ["wavelet"])
-        )
-    if "max" in args.poolings:
-        combos += [("", "", "max")] 
-    if "average" in args.poolings:
-            combos += [("", "", "average")] 
-    for wavelet, node, pooling in combos:
-        yield pooling, wavelet, WAVELET_LEVEL, node
 
 
 def done_runs(results_path):
@@ -139,11 +106,6 @@ def run_models():
     eval_loader = DataLoader(eval_dataset, batch_size=BATCH_SIZE, shuffle=False)
     log("Eval 2019 dataset loaded")
 
-    # X_eval_2021, y_eval_2021, eval_2021_meta = load_data_split("eval_2021")
-    # eval_dataset_2021 = SubbandDataset(X_eval_2021, y_eval_2021)
-    # eval_loader_2021 = DataLoader(eval_dataset_2021, batch_size=BATCH_SIZE, shuffle=False)
-    # log("Eval 2021 loaded")
-
     for seed in args.seeds:
         for pooling, wavelet, level, node in combinations(args):
             seed_everything(seed)
@@ -192,14 +154,6 @@ def run_models():
 
             row, = save_run(eval_output, run_dir, results_path, key_values, y_eval, "ASVspoof 2019", time.time() - start)
             log(f"ASVspoof 2019: EER {row['eer']:.4%} | AUC {row['roc_auc']:.4f}")
-
-            # eval_output = evaluate_and_save(
-            #     model, eval_loader_2021, criterion, device, best_model_state,
-            #     best_model_status, history
-            # )
-
-            # row, = save_run(eval_output, run_dir, results_path, key_values, y_eval_2021, "ASVspoof 2021", time.time() - start)
-            # log(f"ASVspoof 2021: EER {row['eer']:.4%} | AUC {row['roc_auc']:.4f}")
 
             done.add(run_key(pooling, seed, wavelet, node))
 

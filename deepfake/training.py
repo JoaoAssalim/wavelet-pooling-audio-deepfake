@@ -1,5 +1,4 @@
 import time
-
 import torch
 
 from deepfake.metrics import compute_eer, llr_score
@@ -157,3 +156,8 @@ def evaluate_and_save(model, eval_loader, criterion, device, best_model_state, b
     model.load_state_dict(best_model_state)
     _, eer, all_scores = evaluate(model, eval_loader, criterion, device)
     return {"best": best_model_status, "history": history, "eval_eer": eer, "eval_score": all_scores, "state_dict": best_model_state}
+
+
+def evaluate_out_models(model, eval_loader, criterion, device):
+    _, eer, all_scores = evaluate(model, eval_loader, criterion, device)
+    return {"best": {}, "history": {}, "eval_eer": eer, "eval_score": all_scores, "state_dict": {}}

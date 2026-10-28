@@ -1,4 +1,5 @@
 import torch
+
 import torch.nn as nn
 
 from deepfake.features import get_node
