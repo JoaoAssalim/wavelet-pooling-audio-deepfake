@@ -26,7 +26,7 @@ def read_asv_protocol(path, dataset="asv_2019"):
     elif dataset == "asv_2021":
         prot = pd.read_csv(path, sep=r"\s+", header=None, names=["speaker", "filename", "codec", "transmission", "attack", "key", "trim", "phase"])
     prot["is_bonafide"] = prot["key"] == "bonafide"
-    return prot[["filename", "speaker", "attack", "is_bonafide"]].reset_index(drop=True)
+    return prot.reset_index(drop=True)
 
 
 

@@ -3,6 +3,7 @@ import os
 import time
 import torch
 
+import numpy as np
 import pandas as pd
 from sklearn.metrics import (
     auc,
@@ -62,6 +63,9 @@ def save_run(out, run_dir, results_path, key_values, y_eval, eval_split, train_t
     os.makedirs(run_dir, exist_ok=True)
     pd.DataFrame(out["history"]).to_csv(os.path.join(run_dir, "history.csv"), index=False)
     torch.save(out["state_dict"], os.path.join(run_dir, "model.pt"))
+    scores_name = f"scores_eval_{"2019" if eval_split == "ASVspoof 2019" else "2021"}.npy"
+    
+    np.save(os.path.join(run_dir, scores_name), out["eval_score"])
 
     rows = []
     scores = out["eval_score"]

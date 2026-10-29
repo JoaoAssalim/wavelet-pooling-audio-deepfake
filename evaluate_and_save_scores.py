@@ -3,6 +3,7 @@ import os
 import time
 import torch
 
+import numpy as np
 import pandas as pd
 from sklearn.metrics import (
     auc,
@@ -55,9 +56,12 @@ def run_key(pooling, seed, wavelet, node):
     return tuple(str(v) for v in (pooling, seed, wavelet, node))
 
 
-def save_eval(out, results_path, key_values, y_eval, eval_split, train_time):
+def save_eval(out, run_dir, results_path, key_values, y_eval, eval_split, train_time, save_eval_data):
     rows = []
     scores = out["eval_score"]
+    scores_name = f"scores_eval_{"2019" if eval_split == "ASVspoof 2019" else "2021"}.npy"
+    np.save(os.path.join(run_dir, scores_name), out["eval_score"])
+
     fpr, tpr, _ = roc_curve(y_eval, scores, pos_label=1)
 
     train_df = pd.read_csv(results_path)
@@ -78,7 +82,7 @@ def save_eval(out, results_path, key_values, y_eval, eval_split, train_time):
             & (train_df["node"].isna())
         ].iloc[0]
 
-
+    
     rows.append({
         **key_values,
         "eval_split": eval_split,
@@ -89,8 +93,35 @@ def save_eval(out, results_path, key_values, y_eval, eval_split, train_time):
         "train_time_s": round(train_time, 1),
     })
 
-    pd.DataFrame(rows).to_csv(results_path, mode="a", header=not os.path.exists(results_path), index=False)
+    if save_eval_data:
+        pd.DataFrame(rows).to_csv(results_path, mode="a", header=not os.path.exists(results_path), index=False)
     return rows
+
+
+def evaluate_and_save(
+    model_path, y_train, seed, 
+    eval_loader, y_eval, wavelet, 
+    level, node, pooling, device, 
+    run_dir, results_path, dataset, save_eval_data
+):
+    start = time.time()
+
+    model = CustomCNN(wavelet, level, node, pooling).to(device)
+    model.load_state_dict(torch.load(model_path, map_location=device, weights_only=True))
+    model.eval()
+
+    criterion = nn.CrossEntropyLoss(
+        weight=class_weights(y_train, device)
+    )
+
+    key_values = {
+        "seed": seed, "pooling": pooling, "wavelet": wavelet, "node": node,
+    }
+
+    eval_output = evaluate_out_models(model, eval_loader, criterion, device)
+
+    row, = save_eval(eval_output, run_dir, results_path, key_values, y_eval, dataset, time.time() - start, save_eval_data)
+    log(f"{dataset}: EER {row['eer']:.4%} | AUC {row['roc_auc']:.4f}")
 
 
 def evaluate_models():
@@ -98,44 +129,48 @@ def evaluate_models():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     results_path = os.path.join(args.results_dir, "results.csv")
 
+    done_2019 = done_runs(results_path, "ASVspoof 2019")
     done_2021 = done_runs(results_path, "ASVspoof 2021")
 
     # just load for class_weights
     X_train, y_train, train_meta = load_data_split("train_2019")
 
     # eval loads
+    X_eval, y_eval, eval_meta = load_data_split("eval_2019")
+    eval_dataset = SubbandDataset(X_eval, y_eval)
+    eval_loader = DataLoader(eval_dataset, batch_size=BATCH_SIZE, shuffle=False)
+    log("Eval 2019 dataset loaded")
+
     X_eval_2021, y_eval_2021, eval_2021_meta = load_data_split("eval_2021")
     eval_dataset_2021 = SubbandDataset(X_eval_2021, y_eval_2021)
     eval_loader_2021 = DataLoader(eval_dataset_2021, batch_size=BATCH_SIZE, shuffle=False)
-    log("Eval 2021 loaded")
+    log("Eval 2021 dataset loaded")
 
     for seed in args.seeds:
         for pooling, wavelet, level, node in combinations(args): 
             seed_everything(seed)
             model_path = os.path.join(args.results_dir, "runs", pooling, wavelet, node, f"seed_{seed}", "model.pt")
+            run_dir = os.path.join(args.results_dir, "runs", pooling, wavelet, node, f"seed_{seed}")
 
-            if run_key(pooling, seed, wavelet, node) in done_2021:
-                continue 
+            if not os.path.exists(os.path.join(run_dir, "scores_eval_2019.npy")):
+                log(f"--- seed {seed} | {pooling} | {wavelet or '-'} | {node or '-'}")
 
-            log(f"--- seed {seed} | {pooling} | {wavelet or '-'} | {node or '-'}")
-            start = time.time()
+                save_eval = run_key(pooling, seed, wavelet, node) not in done_2019
 
-            model = CustomCNN(wavelet, level, node, pooling).to(device)
-            model.load_state_dict(torch.load(model_path, map_location=device, weights_only=True))
-            model.eval()
+                evaluate_and_save(
+                    model_path, y_train, seed, eval_loader, y_eval, wavelet, level, 
+                    node, pooling, device, run_dir, results_path, "ASVspoof 2019", save_eval
+                )
 
-            criterion = nn.CrossEntropyLoss(
-                weight=class_weights(y_train, device)
-            )
+            if not os.path.exists(os.path.join(run_dir, "scores_eval_2021.npy")):
+                log(f"--- seed {seed} | {pooling} | {wavelet or '-'} | {node or '-'}")
 
-            key_values = {
-                "seed": seed, "pooling": pooling, "wavelet": wavelet, "node": node,
-            }
+                save_eval = run_key(pooling, seed, wavelet, node) not in done_2021
 
-            eval_output = evaluate_out_models(model, eval_loader_2021, criterion, device)
-
-            row, = save_eval(eval_output, results_path, key_values, y_eval_2021, "ASVspoof 2021", time.time() - start)
-            log(f"ASVspoof 2021: EER {row['eer']:.4%} | AUC {row['roc_auc']:.4f}")
+                evaluate_and_save(
+                    model_path, y_train, seed, eval_loader_2021, y_eval_2021, wavelet, level, 
+                    node, pooling, device, run_dir, results_path, "ASVspoof 2021", save_eval
+                )
 
 
 evaluate_models()
