@@ -93,3 +93,20 @@ Input is the raw waveform in `[-1, 1)`, with no hand-crafted features. `CustomCN
 - **Wavelet:** one node of a level-\(L\) packet (`get_node` in `deepfake/features.py`). A path such as `ada` is low-pass, high-pass, low-pass, each with stride 2. Nodes follow frequency order from `frequency_ordered_nodes`.
 
 Training uses class-weighted cross-entropy, AdamW (`lr=1e-4`, `weight_decay=1e-4`), `ReduceLROnPlateau` on dev EER, batch size 32, at most 30 epochs, and early stopping with patience 5. The score is `logit[bonafide] − logit[spoof]`.
+
+## Citation
+
+João Assalim, JoaoAssalim/wavelet-pooling-audio-deepfake: v1.0.0. (Nov. 04, 2026). Zenodo. [doi: 10.5281/zenodo.23950081](https://doi.org/10.5281/zenodo.23950081).
+
+```bibtex
+@software{assalim2026wavelet_pooling,
+  author    = {Assalim, João},
+  title     = {JoaoAssalim/wavelet-pooling-audio-deepfake: v1.0.0},
+  year      = {2026},
+  month     = nov,
+  publisher = {Zenodo},
+  version   = {v1.0.0},
+  doi       = {10.5281/zenodo.23950081},
+  url       = {https://doi.org/10.5281/zenodo.23950081}
+}
+```
