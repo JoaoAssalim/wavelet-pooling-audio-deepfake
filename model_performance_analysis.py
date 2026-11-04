@@ -31,13 +31,6 @@ def parse_args():
     return parser.parse_args()
 
 
-def compute_eer(labels, scores):
-    fpr, tpr, _ = roc_curve(labels, scores, drop_intermediate=False)
-    fnr = 1 - tpr
-    i = np.nanargmin(np.abs(fnr - fpr))
-    return float((fpr[i] + fnr[i]) / 2)
-
-
 def eer_per_attack(meta, scores):
     meta = meta.assign(score=scores)
     bonafide = meta.loc[meta["is_bonafide"], "score"].to_numpy()
