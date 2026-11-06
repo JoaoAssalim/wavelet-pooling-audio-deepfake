@@ -24,6 +24,20 @@ def reconstruct_node(waveforms, wavelet_family, level, node):
     return rec_dtwpt[""]
 
 
+def get_all_dtwpt_decomposition_nodes(waveforms, wavelet_family, level):
+    dtwpt = ptwt.WaveletPacket(data=waveforms, wavelet=wavelet_family, maxlevel=level)
+    all_nodes = dtwpt.get_level(level)
+
+    return {node: dtwpt[node] for node in all_nodes}
+
+
+def compute_subband_entropy(subbands):
+    # subbands: [batch, nodes, channels, time] -> Shannon entropy per sample and node: [batch, nodes]
+    energy = subbands.pow(2).flatten(2)
+    p = energy / (energy.sum(dim=2, keepdim=True) + 1e-12)
+    return -(p * torch.log(p + 1e-12)).sum(dim=2)
+
+
 # def get_node(waveforms, wavelet_family, level, node):
 #     dtwpt = ptwt.WaveletPacket(data=waveforms, wavelet=wavelet_family, maxlevel=level)
 #     return dtwpt[node]

@@ -28,6 +28,8 @@ COST_MODEL = {
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--results-dir", default="results/train_all")
+    # results_max_entropy.csv reads its runs from runs_max_entropy/
+    parser.add_argument("--results-file", default="results.csv")
     return parser.parse_args()
 
 
@@ -107,15 +109,16 @@ def load_asv_2021():
     )
 
 
-def run_dir_of(results_dir, row):
+def run_dir_of(results_dir, runs_name, row):
     if "pooling" in row:
-        return os.path.join(results_dir, "runs", row["pooling"], row["wavelet"], row["node"], f"seed_{row['seed']}")
-    return os.path.join(results_dir, "runs", row["wavelet"], f"seed_{row['seed']}")
+        return os.path.join(results_dir, runs_name, row["pooling"], row["wavelet"], row["node"], f"seed_{row['seed']}")
+    return os.path.join(results_dir, runs_name, row["wavelet"], f"seed_{row['seed']}")
 
 
 def compute_tdcf():
     args = parse_args()
-    results_path = os.path.join(args.results_dir, "results.csv")
+    results_path = os.path.join(args.results_dir, args.results_file)
+    runs_name = os.path.splitext(args.results_file)[0].replace("results", "runs", 1)
     results = pd.read_csv(results_path, keep_default_na=False)
 
     meta_2019 = pd.read_csv(os.path.join(META_DIR, "eval_2019_meta.csv"))
@@ -133,7 +136,7 @@ def compute_tdcf():
     min_tdcf = []
     for _, row in results.iterrows():
         scores_name, is_bonafide, keep, asv, tdcf_fn = splits[row["eval_split"]]
-        scores_path = os.path.join(run_dir_of(args.results_dir, row), scores_name)
+        scores_path = os.path.join(run_dir_of(args.results_dir, runs_name, row), scores_name)
         if not os.path.exists(scores_path):
             print(f"missing {scores_path}")
             min_tdcf.append(np.nan)
