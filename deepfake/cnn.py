@@ -74,9 +74,7 @@ class WaveletEntropyBasedPooling(nn.Module):
         super().__init__()
         self.family = family
         self.level = level
-        # "min" or "max" Shannon entropy per sample
         self.selection = selection
-        # samples per node (frequency order of frequency_ordered_nodes), counted only in training; saved in state_dict
         self.register_buffer("subband_selection", torch.zeros(2 ** level, dtype=torch.long))
         self.last_selection = None
 
