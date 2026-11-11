@@ -1,5 +1,3 @@
-
-
 import os
 import time
 import librosa
@@ -25,6 +23,11 @@ def read_asv_protocol(path, dataset="asv_2019"):
         prot = pd.read_csv(path, sep=" ", header=None, names=["speaker", "filename", "dash", "attack", "key"])
     elif dataset == "asv_2021":
         prot = pd.read_csv(path, sep=r"\s+", header=None, names=["speaker", "filename", "codec", "transmission", "attack", "key", "trim", "phase"])
+    elif dataset == "itw":
+        prot = pd.read_csv(path)
+        prot.columns = ["filename", "speaker", "key"]
+        prot["key"] = np.where(prot["key"] == "bona-fide", "bonafide", "spoof")
+
     prot["is_bonafide"] = prot["key"] == "bonafide"
     return prot.reset_index(drop=True)
 
@@ -72,7 +75,8 @@ def cache_split(split_name, paths, prot):
 
 def cache_asv(split_name, flac_dir, protocol_path, dataset="asv_2019"):
     prot = read_asv_protocol(protocol_path, dataset)
-    paths = [os.path.join(flac_dir, f"{n}.flac") for n in prot["filename"]]
+    extension = ".flac" if dataset != "itw" else ""
+    paths = [os.path.join(flac_dir, f"{n}{extension}") for n in prot["filename"]]
     cache_split(split_name, paths, prot)
 
 
@@ -91,3 +95,7 @@ cache_asv("eval_2019", "../Data/LA/LA/ASVspoof2019_LA_eval/flac",
 cache_asv("eval_2021", "../Data/ASVspoof2021_LA_eval/ASVspoof2021_LA_eval/flac",
           "../Data/ASVspoof2021_LA_eval/ASVspoof2021_LA_eval/trial_metadata.txt",
           dataset="asv_2021")
+
+cache_asv("eval_itw", "../Data/release_in_the_wild",
+          "../Data/release_in_the_wild/meta.csv",
+          dataset="itw")

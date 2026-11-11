@@ -56,11 +56,21 @@ def run_key(pooling, seed, wavelet, node):
     return tuple(str(v) for v in (pooling, seed, wavelet, node))
 
 
+def get_dataset_suffix(eval_split):
+    if eval_split == "ASVspoof 2019":
+        return "2019"
+    elif eval_split == "ASVspoof 2021":
+        return "2021"
+    return "itw"
+
+
 def save_eval(out, run_dir, results_path, key_values, y_eval, eval_split, train_time, save_eval_data):
     rows = []
     scores = out["eval_score"]
-    scores_name = f"scores_eval_{"2019" if eval_split == "ASVspoof 2019" else "2021"}.npy"
-    np.save(os.path.join(run_dir, scores_name), out["eval_score"])
+    scores_name = f"scores_eval_{get_dataset_suffix(eval_split)}.npy"
+
+    if eval_split != "ITW":
+        np.save(os.path.join(run_dir, scores_name), out["eval_score"])
 
     fpr, tpr, _ = roc_curve(y_eval, scores, pos_label=1)
 
@@ -82,7 +92,6 @@ def save_eval(out, run_dir, results_path, key_values, y_eval, eval_split, train_
             & (train_df["node"].isna())
         ].iloc[0]
 
-    
     rows.append({
         **key_values,
         "eval_split": eval_split,
@@ -131,6 +140,7 @@ def evaluate_models():
 
     done_2019 = done_runs(results_path, "ASVspoof 2019")
     done_2021 = done_runs(results_path, "ASVspoof 2021")
+    done_itw = done_runs(results_path, "ITW")
 
     # just load for class_weights
     X_train, y_train, train_meta = load_data_split("train_2019")
@@ -146,6 +156,11 @@ def evaluate_models():
     eval_loader_2021 = DataLoader(eval_dataset_2021, batch_size=BATCH_SIZE, shuffle=False)
     log("Eval 2021 dataset loaded")
 
+    X_eval_itw, y_eval_itw, eval_itw_meta = load_data_split("eval_itw")
+    eval_dataset_itw = SubbandDataset(X_eval_itw, y_eval_itw)
+    eval_loader_itw = DataLoader(eval_dataset_itw, batch_size=BATCH_SIZE, shuffle=False)
+    log("Eval itw dataset loaded")
+
     for seed in args.seeds:
         for pooling, wavelet, level, node in combinations(args): 
             seed_everything(seed)
@@ -153,7 +168,7 @@ def evaluate_models():
             run_dir = os.path.join(args.results_dir, "runs", pooling, wavelet, node, f"seed_{seed}")
 
             if not os.path.exists(os.path.join(run_dir, "scores_eval_2019.npy")):
-                log(f"--- seed {seed} | {pooling} | {wavelet or '-'} | {node or '-'}")
+                log(f"--- seed {seed} | {pooling} | {wavelet or '-'} | {node or '-'} | 2019")
 
                 save_eval = run_key(pooling, seed, wavelet, node) not in done_2019
 
@@ -163,13 +178,23 @@ def evaluate_models():
                 )
 
             if not os.path.exists(os.path.join(run_dir, "scores_eval_2021.npy")):
-                log(f"--- seed {seed} | {pooling} | {wavelet or '-'} | {node or '-'}")
+                log(f"--- seed {seed} | {pooling} | {wavelet or '-'} | {node or '-'} | 2021")
 
                 save_eval = run_key(pooling, seed, wavelet, node) not in done_2021
 
                 evaluate_and_save(
                     model_path, y_train, seed, eval_loader_2021, y_eval_2021, wavelet, level, 
                     node, pooling, device, run_dir, results_path, "ASVspoof 2021", save_eval
+                )
+
+            if not run_key(pooling, seed, wavelet, node) in done_itw:
+                log(f"--- seed {seed} | {pooling} | {wavelet or '-'} | {node or '-'} | ITW")
+
+                save_eval = run_key(pooling, seed, wavelet, node) not in done_itw
+
+                evaluate_and_save(
+                    model_path, y_train, seed, eval_loader_itw, y_eval_itw, wavelet, level, 
+                    node, pooling, device, run_dir, results_path, "ITW", save_eval
                 )
 
 
