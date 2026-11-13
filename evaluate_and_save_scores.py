@@ -61,6 +61,8 @@ def get_dataset_suffix(eval_split):
         return "2019"
     elif eval_split == "ASVspoof 2021":
         return "2021"
+    elif eval_split == "ASVspoof 2021 DF":
+        return "2021_df"
     return "itw"
 
 
@@ -141,6 +143,7 @@ def evaluate_models():
     done_2019 = done_runs(results_path, "ASVspoof 2019")
     done_2021 = done_runs(results_path, "ASVspoof 2021")
     done_itw = done_runs(results_path, "ITW")
+    done_2021_df = done_runs(results_path, "ASVspoof 2021 DF")
 
     # just load for class_weights
     X_train, y_train, train_meta = load_data_split("train_2019")
@@ -148,18 +151,23 @@ def evaluate_models():
     # eval loads
     X_eval, y_eval, eval_meta = load_data_split("eval_2019")
     eval_dataset = SubbandDataset(X_eval, y_eval)
-    eval_loader = DataLoader(eval_dataset, batch_size=BATCH_SIZE, shuffle=False)
+    eval_loader = DataLoader(eval_dataset, batch_size=128, shuffle=False, num_workers=0, pin_memory=True)
     log("Eval 2019 dataset loaded")
 
     X_eval_2021, y_eval_2021, eval_2021_meta = load_data_split("eval_2021")
     eval_dataset_2021 = SubbandDataset(X_eval_2021, y_eval_2021)
-    eval_loader_2021 = DataLoader(eval_dataset_2021, batch_size=BATCH_SIZE, shuffle=False)
+    eval_loader_2021 = DataLoader(eval_dataset_2021, batch_size=128, shuffle=False, num_workers=0, pin_memory=True)
     log("Eval 2021 dataset loaded")
 
     X_eval_itw, y_eval_itw, eval_itw_meta = load_data_split("eval_itw")
     eval_dataset_itw = SubbandDataset(X_eval_itw, y_eval_itw)
-    eval_loader_itw = DataLoader(eval_dataset_itw, batch_size=BATCH_SIZE, shuffle=False)
+    eval_loader_itw = DataLoader(eval_dataset_itw, batch_size=128, shuffle=False, num_workers=0, pin_memory=True)
     log("Eval itw dataset loaded")
+
+    X_eval_2021_df, y_eval_2021_df, eval_2021_df_meta = load_data_split("eval_2021_df")
+    eval_dataset_2021_df = SubbandDataset(X_eval_2021_df, y_eval_2021_df)
+    eval_loader_2021_df = DataLoader(eval_dataset_2021_df, batch_size=128, shuffle=False, num_workers=0, pin_memory=True)
+    log("Eval 2021 DF dataset loaded")
 
     for seed in args.seeds:
         for pooling, wavelet, level, node in combinations(args): 
@@ -195,6 +203,16 @@ def evaluate_models():
                 evaluate_and_save(
                     model_path, y_train, seed, eval_loader_itw, y_eval_itw, wavelet, level, 
                     node, pooling, device, run_dir, results_path, "ITW", save_eval
+                )
+
+            if not run_key(pooling, seed, wavelet, node) in done_2021_df:
+                log(f"--- seed {seed} | {pooling} | {wavelet or '-'} | {node or '-'} | 2021 DF")
+
+                save_eval = run_key(pooling, seed, wavelet, node) not in done_2021_df
+
+                evaluate_and_save(
+                    model_path, y_train, seed, eval_loader_2021_df, y_eval_2021_df, wavelet, level, 
+                    node, pooling, device, run_dir, results_path, "ASVspoof 2021 DF", save_eval
                 )
 
 

@@ -23,6 +23,8 @@ def read_asv_protocol(path, dataset="asv_2019"):
         prot = pd.read_csv(path, sep=" ", header=None, names=["speaker", "filename", "dash", "attack", "key"])
     elif dataset == "asv_2021":
         prot = pd.read_csv(path, sep=r"\s+", header=None, names=["speaker", "filename", "codec", "transmission", "attack", "key", "trim", "phase"])
+    elif dataset == "asv_2021_df":
+        prot = pd.read_csv(path, sep=r"\s+", header=None, names=["speaker", "filename", "codec", "transmission", "attack", "key", "trim", "phase"], usecols=range(8))
     elif dataset == "itw":
         prot = pd.read_csv(path)
         prot.columns = ["filename", "speaker", "key"]
@@ -95,6 +97,10 @@ cache_asv("eval_2019", "../Data/LA/LA/ASVspoof2019_LA_eval/flac",
 cache_asv("eval_2021", "../Data/ASVspoof2021_LA_eval/ASVspoof2021_LA_eval/flac",
           "../Data/ASVspoof2021_LA_eval/ASVspoof2021_LA_eval/trial_metadata.txt",
           dataset="asv_2021")
+
+cache_asv("eval_2021_df", "../Data/ASVspoof2021_DF_eval/flac",
+          "../Data/ASVspoof2021_DF_eval/trial_metadata.txt",
+          dataset="asv_2021_df")
 
 cache_asv("eval_itw", "../Data/release_in_the_wild",
           "../Data/release_in_the_wild/meta.csv",

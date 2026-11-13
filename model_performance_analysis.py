@@ -81,6 +81,17 @@ def analysis_models_attacks_and_codecs():
             codec_scores_2021["eer"] = codec_scores_2021["eer"] * 100
 
 
+            meta_2021_df = pd.read_csv("./datasets/waveforms/eval_2021_df_meta.csv")
+            scores_2021_df = np.load(os.path.join(run_dir, "scores_eval_2021_df.npy"))
+
+            attack_scores_2021_df = eer_per_attack(meta_2021_df, scores_2021_df)
+            attack_scores_2021_df.to_csv(os.path.join(run_dir, "attacks_score_2021_df.csv"), index=False)
+            attack_scores_2021_df["eer"] = attack_scores_2021_df["eer"] * 100
+
+            codec_scores_2021_df = eer_per_codec(meta_2021_df, scores_2021_df)
+            codec_scores_2021_df.to_csv(os.path.join(run_dir, "codecs_score_2021_df.csv"), index=False)
+            codec_scores_2021_df["eer"] = codec_scores_2021_df["eer"] * 100
+
 
 analysis_models_attacks_and_codecs()
 

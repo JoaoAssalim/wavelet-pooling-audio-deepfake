@@ -123,18 +123,25 @@ def compute_tdcf():
 
     meta_2019 = pd.read_csv(os.path.join(META_DIR, "eval_2019_meta.csv"))
     meta_2021 = pd.read_csv(os.path.join(META_DIR, "eval_2021_meta.csv"))
+    meta_2021_df = pd.read_csv(os.path.join(META_DIR, "eval_2021_df_meta.csv"))
     # official 2021 numbers use only the "eval" phase (no progress / hidden trials)
     eval_phase_2021 = (meta_2021["phase"] == "eval").to_numpy()
+    eval_phase_2021_df = (meta_2021_df["phase"] == "eval").to_numpy()
 
     splits = {
         "ASVspoof 2019": ("scores_eval_2019.npy", meta_2019["is_bonafide"].to_numpy(),
                           np.ones(len(meta_2019), dtype=bool), load_asv_2019(), min_tdcf_2019),
         "ASVspoof 2021": ("scores_eval_2021.npy", meta_2021["is_bonafide"].to_numpy(),
                           eval_phase_2021, load_asv_2021(), min_tdcf_2021),
+        "ASVspoof 2021 DF": ("scores_eval_2021_df.npy", meta_2021_df["is_bonafide"].to_numpy(),
+                          eval_phase_2021_df, load_asv_2021(), min_tdcf_2021),
     }
 
     min_tdcf = []
     for _, row in results.iterrows():
+        if row["eval_split"] == "ITW":
+            min_tdcf.append(np.nan)
+            continue
         scores_name, is_bonafide, keep, asv, tdcf_fn = splits[row["eval_split"]]
         scores_path = os.path.join(run_dir_of(args.results_dir, runs_name, row), scores_name)
         if not os.path.exists(scores_path):

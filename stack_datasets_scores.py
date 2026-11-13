@@ -49,6 +49,8 @@ def get_transmission_type(score_path, eval_split):
         return "attack"
     elif eval_split == "2021" and "attack" in score_path:
         return "attack"
+    elif eval_split == "2021 DF" and "attack" in score_path:
+        return "attack"
     return "codec"
 
 
@@ -84,9 +86,13 @@ def evaluate_models():
             # ASV 2019
             stack_results(os.path.join(run_dir, "attacks_score_2019.csv"), results_path, "2019", pooling, wavelet, node, seed)
             # ASV 2021 Attack
-            stack_results(os.path.join(run_dir, "attacks_score_2021.csv"), results_path, "2021", pooling, wavelet, node, seed)
+            stack_results(os.path.join(run_dir, "attacks_score_2021.csv"), results_path, "2021 LA", pooling, wavelet, node, seed)
             # ASV 2021 Codec
-            stack_results(os.path.join(run_dir, "codecs_score_2021.csv"), results_path, "2021", pooling, wavelet, node, seed)
+            stack_results(os.path.join(run_dir, "codecs_score_2021.csv"), results_path, "2021 LA", pooling, wavelet, node, seed)
+            # ASV 2021 Attack
+            stack_results(os.path.join(run_dir, "attacks_score_2021_df.csv"), results_path, "2021 DF", pooling, wavelet, node, seed)
+            # ASV 2021 Codec
+            stack_results(os.path.join(run_dir, "codecs_score_2021_df.csv"), results_path, "2021 DF", pooling, wavelet, node, seed)
 
 
 
